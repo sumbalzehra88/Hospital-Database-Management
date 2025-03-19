@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS NURSE (
 
 CREATE TABLE IF NOT EXISTS ADMIN (
     ADMIN_ID INTEGER PRIMARY KEY,
-    NAME TEXT NOT NULL
+    NAME TEXT NOT NULL,
+    DESIGNATION TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS PATIENT (
@@ -131,3 +132,4 @@ insert_data_from_csv('User_data.csv', 'USER_DATA', conn)
 
 # Close the database connection
 conn.close()
+
