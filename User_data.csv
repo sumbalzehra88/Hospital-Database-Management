@@ -1,0 +1,6 @@
+user_id,username,password,email,user_type
+1,john_doe,pass1234,john.doe@gmail.com,user
+2,jane_smith,smith5678,jane.smith@gmail.com,user
+3,alice_wonder,alice999,alice.wonder@gmail.com,user
+4,bob_brown,bob1234,bob.brown@yahoo.com,user
+5,charlie_green,charlie567,charlie.green@gmail.com,user
