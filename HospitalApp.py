@@ -820,7 +820,7 @@ def main():
         user_type = st.session_state(user_type)
         if page == "Dashboard":
             show_dashboard(user_type)
-            elif user_type == "Doctor":
+        elif user_type == "Doctor":
             if page == "Appointments":
                 doctor_appointments(st.session_state["username"])
             elif page == "Medical Records":
