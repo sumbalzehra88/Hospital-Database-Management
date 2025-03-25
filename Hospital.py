@@ -106,6 +106,7 @@ items TEXT NOT NULL,
 amount REAL NOT NULL, 
 FOREIGN KEY (pat_id) REFERENCES Patient(pat_id) ON DELETE CASCADE);
 
+DROP VIEW IF EXISTS Nurse_Appointments;
 CREATE VIEW Nurse_Appointments AS
 SELECT 
     A.appt_id, 
@@ -124,7 +125,7 @@ JOIN Doctor D ON A.doc_id = D.doc_id
 JOIN Staff S ON S.staff_id = P.pat_id  
 WHERE S.designation = 'Nurse';  
 
-
+DROP VIEW IF EXISTS Nurse_Patient_History;
 CREATE VIEW Nurse_Patient_History AS
 SELECT 
     UH.pat_name, 
