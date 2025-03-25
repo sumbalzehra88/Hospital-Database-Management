@@ -520,6 +520,252 @@ def show_dashboard(user_type):
             
         st.markdown('</div>', unsafe_allow_html=True)
 
+import streamlit as st
+import sqlite3
+import pandas as pd
+
+def get_db_connection():
+    return sqlite3.connect("hospital.db", check_same_thread=False)
+
+def center_align():
+    st.markdown("""
+        <style>
+            .centered {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+            .stDataFrame { margin: auto; }
+        </style>
+    """, unsafe_allow_html=True)
+
+def doctor_appointments(doctor_id):
+    center_align()
+    st.markdown('<div class="centered">', unsafe_allow_html=True)
+    st.markdown("## Appointments")
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    # ✅ Convert doctor's name to `doc_id`
+    c.execute("SELECT doc_id FROM doctor WHERE doc_name = ?", (doctor_id,))
+    result = c.fetchone()
+
+    if not result:
+        st.error("No doctor ID found for this user!")
+        return
+    
+    doctor_id = result[0]  # Extract actual `doc_id`
+    st.write("Doctor ID →", doctor_id)
+
+    # ✅ Fetch appointments using the correct `doc_id`
+    query = """
+    SELECT A.appt_id, P.fname, P.lname, A.date, A.time
+    FROM Appointment A
+    JOIN Patient P ON A.pat_id = P.pat_id
+    WHERE A.doc_id = ?
+    """
+    
+    df = pd.read_sql_query(query, conn, params=[doctor_id])
+    conn.close()
+
+    # ✅ Remove any accidental duplicates
+    df = df.drop_duplicates()
+
+    if df.empty:
+        st.warning("No appointments found.")
+    else:
+        st.dataframe(df)  # ✅ Show only unique appointments
+
+
+
+def doctor_patients(doctor_id):
+    center_align()
+    st.markdown('<div class="centered">', unsafe_allow_html=True)
+    st.markdown("## Assigned Patients")
+
+    conn = get_db_connection()
+    c = conn.cursor()
+
+    # ✅ Convert doctor's name to `doc_id`
+    c.execute("SELECT doc_id FROM doctor WHERE doc_name = ?", (doctor_id,))
+    result = c.fetchone()
+
+    if not result:
+        st.error("No doctor ID found for this user!")
+        return
+    
+    doctor_id = result[0]  # Extract actual `doc_id`
+    st.write("Doctor ID →", doctor_id)
+
+    # ✅ Fetch assigned patients using the correct `doc_id`
+    query = """
+    SELECT DISTINCT P.pat_id, P.fname, P.lname
+    FROM Patient P
+    JOIN Appointment A ON P.pat_id = A.pat_id
+    WHERE A.doc_id = ?
+    """
+    
+    df = pd.read_sql_query(query, conn, params=[doctor_id])
+    conn.close()
+
+    # ✅ Remove any accidental duplicates
+    df = df.drop_duplicates()
+
+    if df.empty:
+        st.warning("No assigned patients found.")
+    else:
+        st.dataframe(df)  # ✅ Show only unique patients
+
+def medical_records(doctor_id):
+    center_align()
+    st.markdown('<div class="centered">', unsafe_allow_html=True)
+    st.markdown("## Medical Records", unsafe_allow_html=True)
+
+    patient_name = st.text_input("Search Patient by Name", key=f"patient_search_{doctor_id}")
+    updated_notes = st.text_area("Update Medical Notes")
+
+    conn = get_db_connection()
+    c = conn.cursor()
+
+    if st.button("Search"):
+        query = """
+        SELECT U.username AS registered_patient, P.fname AS existing_patient
+        FROM user_data U
+        FULL OUTER JOIN Patient P ON LOWER(U.username) = LOWER(P.fname)
+        WHERE LOWER(U.username) = LOWER(?) OR LOWER(P.fname) = LOWER(?)
+        """
+        df = pd.read_sql_query(query, conn, params=[patient_name, patient_name])
+
+        if df.empty:
+            st.warning("No matching patient found in records.")
+        else:
+            st.success("Patient found. Fetching medical history...")
+
+            # ✅ Fetch existing medical history from updated_history
+            history_query = "SELECT history FROM updated_history WHERE pat_name = ?"
+            history_df = pd.read_sql_query(history_query, conn, params=[patient_name])
+
+            if history_df.empty:
+                st.info("No previous medical history found.")
+            else:
+                st.subheader("Existing Medical History")
+                st.dataframe(history_df)
+
+    if st.button("Update Record"):
+        st.write("Update button clicked")
+
+        if not updated_notes.strip():
+            st.warning("Cannot save empty notes!")
+        else:
+            # ✅ Check if patient exists in either user_data or Patient table
+            c.execute("""
+                SELECT username FROM user_data WHERE username = ?
+                UNION 
+                SELECT fname FROM Patient WHERE fname = ?
+            """, (patient_name, patient_name))
+            result = c.fetchone()
+
+            if not result:
+                st.warning("No matching patient found for update!")
+            else:
+                # ✅ Insert a new medical history entry in updated_history
+                c.execute("INSERT INTO updated_history (pat_name, history) VALUES (?, ?)", 
+                          (patient_name, updated_notes))
+                st.success("Medical record updated successfully!")
+
+                conn.commit()
+
+                # ✅ Fetch and display updated records
+                df = pd.read_sql_query("SELECT * FROM updated_history WHERE pat_name = ?", 
+                                       conn, params=[patient_name])
+                st.dataframe(df)
+
+    conn.close()
+
+
+def nurse_appointments(nurse_id):
+    center_align()
+    st.markdown("## 🏥 Search Patient’s Appointment")
+
+    conn = get_db_connection()
+
+    # 🔍 Input field for searching by patient name
+    search_name = st.text_input("Enter Patient's Name")
+
+    if st.button("Search"):
+        query = """
+        SELECT A.appt_id, 
+               COALESCE(P.fname, U.username) AS patient_name, 
+               A.date, A.time
+        FROM Appointment A
+        LEFT JOIN Patient P ON A.pat_id = P.pat_id  -- ✅ Match existing patients
+        LEFT JOIN user_data U ON LOWER(U.username) = LOWER(P.fname)  -- ✅ Match registered users
+        WHERE (LOWER(P.fname) LIKE LOWER(?) OR LOWER(U.username) LIKE LOWER(?));
+        """
+        
+        df = pd.read_sql_query(query, conn, params=[f"%{search_name}%", f"%{search_name}%"])
+
+        if df.empty:
+            st.warning("⚠️ No appointments found for this patient.")
+        else:
+            st.dataframe(df)  # ✅ Show only required columns
+
+    conn.close()
+
+
+def nurse_patient_history():
+    center_align()
+    st.markdown("## Search Patient History")
+
+    conn = get_db_connection()
+
+    # ✅ Input field for searching by patient name
+    search_name = st.text_input("Enter Patient's Name")
+
+    # ✅ Search button
+    if st.button("Search"):
+        if search_name.strip():  # Ensures the input is not empty
+            query = "SELECT * FROM Nurse_Patient_History WHERE pat_name LIKE ?"
+            df = pd.read_sql_query(query, conn, params=[f"%{search_name}%"])
+
+            if df.empty:
+                st.warning("No medical history found for this patient.")
+            else:
+                st.dataframe(df)
+        else:
+            st.warning("Please enter a patient's name before searching.")
+
+    conn.close()
+
+
+def nurse_search_doctor():
+    center_align()
+    st.markdown("## Search Patient’s Doctor")
+
+    conn = get_db_connection()
+
+    # ✅ Input field for searching by patient name
+    search_name = st.text_input("Enter Patient's Name")
+
+    if st.button("Search"):
+        query = """
+        SELECT P.pat_id, P.fname, P.lname, D.doc_name
+        FROM Patient P
+        JOIN Appointment A ON P.pat_id = A.pat_id
+        JOIN Doctor D ON A.doc_id = D.doc_id
+        WHERE LOWER(P.fname) LIKE LOWER(?) OR LOWER(P.lname) LIKE LOWER(?);
+        """
+        df = pd.read_sql_query(query, conn, params=[f"%{search_name}%", f"%{search_name}%"])
+
+        if df.empty:
+            st.warning("No doctor found for this patient.")
+        else:
+            st.dataframe(df)
+
+    conn.close()
+
+
 # Main Application of Hospital Management System
 def main():
     # Initialize session state variables if not exist
@@ -550,7 +796,7 @@ def main():
             elif st.session_state["user_type"] == "Patient":
                 page = st.radio("Navigation", ["Dashboard", "Appointments", "Medical Records", "Billing"])
             elif st.session_state["user_type"] == "Nurse":
-                page = st.radio("Navigation", ["Dashboard", "Appointments", "Patient Care", "Medication"])
+                page = st.radio("Navigation", ["Dashboard", "Assigned Doctor", "Appointments", "Medical Records"])
             elif st.session_state["user_type"] == "Cashier":
                 page = st.radio("Navigation", ["Dashboard", "Billing", "Payments", "Reports"])
             else:
@@ -573,8 +819,40 @@ def main():
     if st.session_state["logged_in"]:
         if page == "Dashboard":
             show_dashboard(st.session_state["user_type"])
-        else:
-            st.info(f"The {page} page is under construction.")
+            elif user_type == "Doctor":
+            if page == "Appointments":
+                doctor_appointments(st.session_state["username"])
+            elif page == "Medical Records":
+                medical_records(st.session_state["username"])
+            elif page == "Patients":
+                doctor_patients(st.session_state["username"])
+                
+        if st.session_state["user_type"] == "Nurse":
+            conn = get_db_connection()
+            c = conn.cursor()
+            query = """
+                SELECT S.staff_id, S.name, N.nurse_id, N.fname || ' ' || N.lname AS nurse_fullname
+                FROM Staff S
+                JOIN Nurse N ON S.staff_id = N.nurse_id
+                WHERE LOWER(S.name) = LOWER(N.fname || ' ' || N.lname);
+                """
+            c.execute(query)
+            result = c.fetchone()
+            conn.close()
+
+# ✅ Debugging output
+            if result:
+                nurse_id = result[2]  # Extract `nurse_id`
+                st.write("✅ Nurse ID →", nurse_id)
+            else:
+                st.error("❌ No matching Nurse found!")
+
+            if page == "Assigned Doctor":  
+                nurse_search_doctor()  # ✅ Now searches for patient’s doctor
+            elif page == "Appointments":
+                nurse_appointments(nurse_id)  # ✅ Now searches for patient’s appointments
+            elif page == "Medical Records":
+                nurse_patient_history()
     else:
         if page == "User Authentication":
             user_authentication_page()
