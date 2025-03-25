@@ -35,7 +35,12 @@ CREATE TABLE IF NOT EXISTS USER_DATA(
     password TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     user_type TEXT NOT NULL);
-                   
+
+CREATE TABLE IF NOT EXISTS updated_history (
+            ID INTEGER PRIMARY KEY,
+            pat_name TEXT,
+            history TEXT NOT NULL
+        );
 
 CREATE TABLE IF NOT EXISTS DEPARTMENT (
     DEPT_ID INTEGER PRIMARY KEY,
@@ -101,7 +106,30 @@ items TEXT NOT NULL,
 amount REAL NOT NULL, 
 FOREIGN KEY (pat_id) REFERENCES Patient(pat_id) ON DELETE CASCADE);
 
+CREATE VIEW Nurse_Appointments AS
+SELECT 
+    A.appt_id, 
+    P.pat_id, 
+    P.fname AS patient_fname, 
+    P.lname AS patient_lname, 
+    A.date, 
+    A.time, 
+    D.doc_id, 
+    D.doc_name AS doctor_name,
+    S.staff_id AS nurse_id,  
+    S.name AS nurse_name
+FROM Appointment A
+JOIN Patient P ON A.pat_id = P.pat_id
+JOIN Doctor D ON A.doc_id = D.doc_id
+JOIN Staff S ON S.staff_id = P.pat_id  
+WHERE S.designation = 'Nurse';  
 
+
+CREATE VIEW Nurse_Patient_History AS
+SELECT 
+    UH.pat_name, 
+    UH.history
+FROM Updated_History UH;
 
 
 PRAGMA foreign_keys=OFF;
