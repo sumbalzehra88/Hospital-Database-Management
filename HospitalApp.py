@@ -817,8 +817,9 @@ def main():
     
     # Main content area
     if st.session_state["logged_in"]:
+        user_type = st.session_state(user_type)
         if page == "Dashboard":
-            show_dashboard(st.session_state["user_type"])
+            show_dashboard(user_type)
             elif user_type == "Doctor":
             if page == "Appointments":
                 doctor_appointments(st.session_state["username"])
